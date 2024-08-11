@@ -1,0 +1,796 @@
+```{r}
+
+df = df %>% filter(respondeu == 'Respondentes')
+dim(df)
+
+for (coluna in names(df)){
+  classe = class(df[[coluna]])
+  if (classe == 'factor'){
+    df[[coluna]] = droplevels(df[[coluna]])
+  }
+}
+
+```
+
+#### Contagens e Medidas
+
+```{r Contagens e Medidas Gerais}
+coluna_q11 = c('q11_0','q11_1','q11_2','q11_3','q11_4','q11_5')
+
+tabelona = cont(df, 'cargo') %>% tabelinha_ajust()
+tabelona = tabelona[FALSE, ]
+
+#colunas_demograficas
+#questoes_acertiva
+#coluna_q11
+for (coluna in questoes_acertiva){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    p_value = shapiro.test(df[[coluna]])$p.value
+    if (p_value > 0.05){
+      tabelinha = summary_numerico_parametrico(df, coluna) %>% tabelinha_ajust()
+    }else{
+      tabelinha = summary_numerico_n_parametrico(df, coluna) %>% tabelinha_ajust()
+    }
+  }else{
+    tabelinha = cont(df, coluna) %>% tabelinha_ajust()
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('q11_',1:5), paste0('outros_campos_',1:6)))
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+```
+
+#### Analise Calibração
+
+```{r Q12, Q13, Q14, 16_01}
+questao = '14'
+questao %>% capture()
+
+# Tabelas ####
+# Todos os Niveis
+coluna_antiga = paste0('q',questao,'')
+cont(df, coluna_antiga) %>% capture()
+
+# Grau de Confiança
+coluna_grau = paste0('q',questao,'_grau')
+# cont(df, coluna_grau) %>% capture()
+
+# Contagem Binaria (Acerto ou Erro)
+coluna_binaria = paste0('q',questao,'_01')
+cont(df, coluna_binaria) %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (n-%)
+if (normalidade_por_grupo_criterio(df, coluna_grau, coluna_binaria) == TRUE){
+  tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_grau, coluna_binaria)}else{
+    tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_grau, coluna_binaria)}
+colnames(tabelinha)[colnames(tabelinha) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_binaria]]), ]), ")")
+niveis = levels(df[[coluna_binaria]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_binaria]])[i]
+  percent = prop.table(table(df[[coluna_binaria]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (n=", n, ")")
+  colnames(tabelinha)[colnames(tabelinha) == nivel] = texto
+  }
+
+tabelinha %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (%)
+#conti(df, coluna_binaria, coluna_grau, 'row') %>% capture()
+
+# Grafico ####
+tabela = cont(df, coluna_binaria)
+rotulo_respincor = paste0('Incorrect Answer', '\n', tabela$percent[1], ' (', tabela$n[1], ')')
+rotulo_respcor = paste0('Right answer', '\n', tabela$percent[2], ' (', tabela$n[2], ')')
+
+nao_parametrico = retorne_p(wilcox.test(df[[coluna_grau]]~df[[coluna_binaria]], df)$p.value)
+subtitulo = paste0("P-value (Mann-Whitney) = ", nao_parametrico)
+# parametrico = retorne_p(t.test(df[[coluna_grau]]~df[[coluna_binaria]], df)$p.value)
+# subtitulo = paste0(subtitulo, " | (T-Test) = ", parametrico)
+
+titulo = paste0('Question ', questao)
+
+ggplot(df %>% filter(!is.na(!!sym(coluna_binaria))), aes(x=as.factor(!!sym(coluna_binaria)), y=!!sym(coluna_grau), fill=as.factor(!!sym(coluna_binaria)))) + 
+  geom_jitter(alpha=0.5, show.legend = F, size=2.5, position=position_jitter(0.25)) +
+  geom_violin(alpha=0.2, show.legend = F, fill='white') +
+  geom_boxplot(alpha=0.8, show.legend = F, width=0.5) + 
+  #geom_errorbar(stat = "summary", fun.data = "mean_se", width= 0.3, color="white") + #desvio padrão 
+  #geom_point(stat = "summary", fun = "mean", show.legend = F, color="red", size=2) +#média
+  labs(x="", y='Degree of confidence in the answer', subtitle=subtitulo, title=titulo) + 
+  theme(legend.position = "bottom",axis.line = element_line(colour = "black")) +
+  theme_bw() +
+  scale_x_discrete(labels = c(rotulo_respincor,rotulo_respcor)) +
+  scale_fill_manual(values=c("#DF5474","#118ab2")) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20))
+
+#ggsave(paste0('Q',questao,'.png'), height=10, width=10.5, units="cm", dpi= 600)
+
+###
+# tamanho do efeito
+col_cat = coluna_binaria
+col_num = coluna_grau
+grupo1 = df[[col_num]][df[[col_cat]] == niveis[1]]
+grupo2 = df[[col_num]][df[[col_cat]] == niveis[2]]
+teste_hip = wilcox.test(grupo2, grupo1, conf.int = TRUE)
+estimador = as.character(rround(teste_hip$estimate,2))
+IC_00 = as.character(rround(teste_hip$conf.int[1],2))
+IC_01 = as.character(rround(teste_hip$conf.int[2],2))
+hodges_lehmann = paste0('HL: ', estimador,' (',IC_00,' to ',IC_01,')')
+hodges_lehmann# %>% capture()
+
+```
+
+
+```{r Q15}
+cont(df, "q15") %>% capture()
+```
+
+
+```{r Q16}
+# Q16_0 #############################################################################################################################
+# Tabelas ####
+coluna_antiga = "q16_0"
+coluna_analisada = 'q16_0_01'
+coluna_n = 'q16_grau'
+
+cont(df, coluna_antiga) %>% capture()
+#cont(df, coluna_n) %>% capture()
+cont(df, coluna_analisada) %>% capture()
+
+if (normalidade_por_grupo_criterio(df, coluna_n, coluna_analisada) == TRUE){
+  tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_n, coluna_analisada)}else{
+    tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_n, coluna_analisada)}
+colnames(tabelinha)[colnames(tabelinha) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelinha)[colnames(tabelinha) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelinha %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (%)
+#conti(df, 'q16_0_01', 'q16_grau', 'row') %>% capture()
+
+# Grafico ####
+tabela = cont(df, coluna_analisada)
+rotulo_respincor = paste0('Incorrect Answer', '\n', tabela$percent[1], ' (', tabela$n[1], ')')
+rotulo_respcor = paste0('Right answer', '\n', tabela$percent[2], ' (', tabela$n[2], ')')
+
+nao_parametrico = retorne_p(wilcox.test(q16_grau~q16_0_01, df)$p.value)
+subtitulo = paste0("P-value (Mann-Whitney) = ", nao_parametrico)
+parametrico = retorne_p(t.test(q16_grau~q16_0_01, df)$p.value)
+subtitulo = paste0(subtitulo, " | (T-Test) = ", parametrico)
+
+ggplot(df %>% filter(!is.na(q16_0_01)), aes(x=as.factor(x=q16_0_01), y=q16_grau, fill=as.factor(q16_0_01))) + 
+  geom_jitter(alpha=0.5, show.legend = F, size=2.5, position=position_jitter(0.25)) +
+  geom_violin(alpha=0.2, show.legend = F, fill='white') +
+  geom_boxplot(alpha=0.8, show.legend = F, width=0.5) + 
+  geom_errorbar(stat = "summary", fun.data = "mean_se", width= 0.3, color="white") +
+  geom_point(stat = "summary", fun = "mean", show.legend = F, color="red", size=2) +
+  labs(x="", y='Degree of confidence in the answer', subtitle=subtitulo, title='Question 16 - Numerator') + 
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic'), 
+        legend.position = "bottom",axis.line = element_line(colour = "black")) +
+  theme_bw() +
+  scale_x_discrete(labels = c(rotulo_respincor,rotulo_respcor)) +
+  scale_fill_manual(values=c("#DF5474","#118ab2")) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20))
+
+#ggsave("Q16_0.png", height=10, width=10.5, units="cm", dpi= 600)
+
+###
+# tamanho do efeito
+col_cat = coluna_analisada
+col_num = coluna_n
+grupo1 = df[[col_num]][df[[col_cat]] == niveis[1]]
+grupo2 = df[[col_num]][df[[col_cat]] == niveis[2]]
+teste_hip = wilcox.test(grupo2, grupo1, conf.int = TRUE)
+estimador = as.character(rround(teste_hip$estimate,2))
+IC_00 = as.character(rround(teste_hip$conf.int[1],2))
+IC_01 = as.character(rround(teste_hip$conf.int[2],2))
+hodges_lehmann = paste0('HL: ', estimador,' (',IC_00,' to ',IC_01,')')
+#hodges_lehmann %>% capture()
+
+# Q16_1 #############################################################################################################################
+# Tabelas ####
+coluna_antiga = "q16_1"
+coluna_analisada = 'q16_1_01'
+coluna_n = 'q16_grau'
+
+cont(df, coluna_antiga) %>% capture()
+#cont(df, coluna_n) %>% capture()
+cont(df, coluna_analisada) %>% capture()
+
+if (normalidade_por_grupo_criterio(df, coluna_n, coluna_analisada) == TRUE){
+  tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_n, coluna_analisada)}else{
+    tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_n, coluna_analisada)}
+colnames(tabelinha)[colnames(tabelinha) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelinha)[colnames(tabelinha) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelinha %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (%)
+#conti(df, 'q16_1_01', 'q16_grau', 'row') %>% capture()
+
+# Grafico ####
+tabela = cont(df, coluna_analisada)
+rotulo_respincor = paste0('Incorrect Answer', '\n', tabela$percent[1], ' (', tabela$n[1], ')')
+rotulo_respcor = paste0('Right answer', '\n', tabela$percent[2], ' (', tabela$n[2], ')')
+
+nao_parametrico = retorne_p(wilcox.test(q16_grau~q16_1_01, df)$p.value)
+subtitulo = paste0("P-value (Mann-Whitney) = ", nao_parametrico)
+parametrico = retorne_p(t.test(q16_grau~q16_1_01, df)$p.value)
+subtitulo = paste0(subtitulo, " | (T-Test) = ", parametrico)
+
+ggplot(df %>% filter(!is.na(q16_1_01)), aes(x=as.factor(x=q16_1_01), y=q16_grau, fill=as.factor(q16_1_01))) + 
+  geom_jitter(alpha=0.5, show.legend = F, size=2.5, position=position_jitter(0.25)) +
+  geom_violin(alpha=0.2, show.legend = F, fill='white') +
+  geom_boxplot(alpha=0.8, show.legend = F, width=0.5) + 
+  geom_errorbar(stat = "summary", fun.data = "mean_se", width= 0.3, color="white") +
+  geom_point(stat = "summary", fun = "mean", show.legend = F, color="red", size=2) +
+  labs(x="", y='Degree of confidence in the answer', subtitle=subtitulo, title='Question 16 - Denominator') + 
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic'), 
+        legend.position = "bottom",axis.line = element_line(colour = "black")) +
+  theme_bw() +
+  scale_x_discrete(labels = c(rotulo_respincor,rotulo_respcor)) +
+  scale_fill_manual(values=c("#DF5474","#118ab2")) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20))
+
+#ggsave("Q16_1.png", height=10, width=10.5, units="cm", dpi= 600)
+
+###
+# tamanho do efeito
+col_cat = coluna_analisada
+col_num = coluna_n
+grupo1 = df[[col_num]][df[[col_cat]] == niveis[1]]
+grupo2 = df[[col_num]][df[[col_cat]] == niveis[2]]
+teste_hip = wilcox.test(grupo2, grupo1, conf.int = TRUE)
+estimador = as.character(rround(teste_hip$estimate,2))
+IC_00 = as.character(rround(teste_hip$conf.int[1],2))
+IC_01 = as.character(rround(teste_hip$conf.int[2],2))
+hodges_lehmann = paste0('HL: ', estimador,' (',IC_00,' to ',IC_01,')')
+#hodges_lehmann %>% capture()
+
+# Tabelas:ACERTARAM AS DUAS QUESTÕES #############################################################################################################################
+
+coluna_analisada = 'q16_01_01'
+coluna_grau = 'q16_grau'
+
+#cont(df, coluna_n) %>% capture()
+cont(df, coluna_analisada) %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (n-%)
+if (normalidade_por_grupo_criterio(df, coluna_grau, coluna_analisada) == TRUE){
+  tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_grau, coluna_analisada)}else{
+    tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna_grau, coluna_analisada)}
+colnames(tabelinha)[colnames(tabelinha) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_analisada]])[i]
+  percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (n=", n, ")")
+  colnames(tabelinha)[colnames(tabelinha) == nivel] = texto
+  }
+
+tabelinha %>% capture()
+
+# Nivel de confiança por (Acerto ou Erro) (%)
+#conti(df, 'q16_01_01', 'q16_grau', 'row') %>% capture()
+
+# Grafico #####
+tabela = cont(df, coluna_analisada)
+rotulo_respincor = paste0('Incorrect Answer', '\n', tabela$percent[1], ' (', tabela$n[1], ')')
+rotulo_respcor = paste0('Right answer', '\n', tabela$percent[2], ' (', tabela$n[2], ')')
+
+nao_parametrico = retorne_p(wilcox.test(q16_grau~q16_01_01, df)$p.value)
+subtitulo = paste0("P-value (Mann-Whitney) = ", nao_parametrico)
+#parametrico = retorne_p(t.test(q16_grau~q16_01_01, df)$p.value)
+#subtitulo = paste0(subtitulo, " | (T-Test) = ", parametrico)
+
+ggplot(df %>% filter(!is.na(q16_01_01)), aes(x=as.factor(x=q16_01_01), y=q16_grau, fill=as.factor(q16_01_01))) + 
+  geom_jitter(alpha=0.5, show.legend = F, size=2.5, position=position_jitter(0.25)) +
+  geom_violin(alpha=0.2, show.legend = F, fill='white') +
+  geom_boxplot(alpha=0.8, show.legend = F, width=0.5) + 
+  #geom_errorbar(stat = "summary", fun.data = "mean_se", width= 0.3, color="white") +
+  #geom_point(stat = "summary", fun = "mean", show.legend = F, color="red", size=2) +
+  labs(x="", y='Degree of confidence in the answer', subtitle=subtitulo, title='Question 16 - (Numerator + Denominator)') + 
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic'), 
+        legend.position = "bottom",axis.line = element_line(colour = "black")) +
+  theme_bw() +
+  scale_x_discrete(labels = c(rotulo_respincor,rotulo_respcor)) +
+  scale_fill_manual(values=c("#DF5474","#118ab2")) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20))
+
+#ggsave("Q16_01.png", height=10, width=10.5, units="cm", dpi= 600)
+
+###
+# tamanho do efeito
+col_cat = coluna_analisada
+col_num = coluna_n
+grupo1 = df[[col_num]][df[[col_cat]] == niveis[1]]
+grupo2 = df[[col_num]][df[[col_cat]] == niveis[2]]
+teste_hip = wilcox.test(grupo2, grupo1, conf.int = TRUE)
+estimador = as.character(rround(teste_hip$estimate,2))
+IC_00 = as.character(rround(teste_hip$conf.int[1],2))
+IC_01 = as.character(rround(teste_hip$conf.int[2],2))
+hodges_lehmann = paste0('HL: ', estimador,' (',IC_00,' to ',IC_01,')')
+#hodges_lehmann %>% capture()
+
+```
+
+
+```{r Q15 vs Q16}
+conti(df, 'q16_01_01', 'q15', 'row') %>% capture()
+```
+
+
+```{r Q17}
+lista_coluna0 = c('q17_0','q17_1','q17_2','q17_3','q17_4','q17_5','q17_6','q17_7')
+lista_coluna1 = c('q17_0_5','q17_1_5','q17_2_5','q17_3_5','q17_4_5','q17_5_5','q17_6_5','q17_7_5')
+
+for (i in lista_coluna1){
+  nome_col = paste0(i, '_bi')
+  
+  df[[nome_col]] = df[[i]]
+  df[[nome_col]] = as.character(df[[nome_col]])
+  df[[nome_col]][is.na(df[[nome_col]])] = '0. Não Especificou'
+  df[[nome_col]] = factor(df[[nome_col]], levels = c('0. Não Especificou','Prefiro não dizer','Implementada no meu hospital'))
+  df[[nome_col]] %>% table()
+}
+
+lista_coluna1_bi = paste0(lista_coluna1, '_bi')
+lista_colunas = append(lista_coluna0, lista_coluna1_bi) %>% sort()
+
+##########################
+##### Contagem geral 
+
+tabelona = cont(df, 'cargo') %>% tabelinha_ajust()
+tabelona = tabelona[FALSE, ]
+
+for (coluna in lista_colunas){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    p_value = shapiro.test(df[[coluna]])$p.value
+    if (p_value > 0.05){
+      tabelinha = summary_numerico_parametrico(df, coluna) %>% tabelinha_ajust()
+    }else{
+      tabelinha = summary_numerico_n_parametrico(df, coluna) %>% tabelinha_ajust()
+    }
+  }else{
+    tabelinha = cont(df, coluna) %>% tabelinha_ajust()
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona %>% capture()
+
+```
+```{r Q17 - analise cruzamento}
+for (qnum in 1:7){
+  # vai de 1 a 7
+  #qnum = '1'
+  qnum = as.character(qnum)
+  coluna_analisada = paste0('q17_',qnum,'_5', '_bi')
+  coluna_x = paste0('q17_',qnum)
+  tabelona = conti(df, coluna_analisada, coluna_x)
+  
+  colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+  niveis = levels(df[[coluna_analisada]])
+  for (i in 1:length(niveis)){
+    nivel = niveis[i]
+    n = table(df[[coluna_analisada]])[i]
+    percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+    percent = rround(percent, 2)
+    percent = paste0(percent, '%')
+    texto = paste0(nivel, ' ', percent, " (n=", n, ")")
+    colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+  
+  tabelona %>% capture()
+}
+```
+
+```{r}
+
+df$setor_que_trabalha2 = df$setor_que_trabalha
+df$setor_que_trabalha2[df$setor_que_trabalha2 == 'Setor Publico e Privado'] = 'Setor Privado'
+df$setor_que_trabalha2 = droplevels(df$setor_que_trabalha2)
+
+
+for (qnum in 1:7){
+  # vai de 1 a 7
+  #qnum = '1'
+  qnum = as.character(qnum)
+  coluna_analisada = paste0('q17_',qnum,'_5', '_bi')
+  #setor_que_trabalha #setor_que_trabalha2
+  coluna_x = 'setor_que_trabalha2'
+  tabelona = conti(df, coluna_analisada, coluna_x)
+  
+  colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+  niveis = levels(df[[coluna_analisada]])
+  for (i in 1:length(niveis)){
+    nivel = niveis[i]
+    n = table(df[[coluna_analisada]])[i]
+    percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+    percent = rround(percent, 2)
+    percent = paste0(percent, '%')
+    texto = paste0(nivel, ' ', percent, " (n=", n, ")")
+    colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+  
+  tabelona %>% capture()
+}
+```
+
+
+```{r Q18}
+#lista_coluna = c('q18_0','q18_1','q18_2')
+lista_coluna = c('q18_0_01','q18_1_01','q18_2_01')
+
+tabelona = cont(df, 'cargo') %>% tabelinha_ajust()
+tabelona = tabelona[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    p_value = shapiro.test(df[[coluna]])$p.value
+    if (p_value > 0.05){
+      tabelinha = summary_numerico_parametrico(df, coluna) %>% tabelinha_ajust()
+    }else{
+      tabelinha = summary_numerico_n_parametrico(df, coluna) %>% tabelinha_ajust()
+    }
+  }else{
+    tabelinha = cont(df, coluna) %>% tabelinha_ajust()
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+tabelona %>% capture()
+
+```
+
+```{r Q19}
+cont(df, 'q19') %>% capture
+```
+
+```{r Q20}
+cont(df, 'q20') %>% capture()
+```
+
+```{r Q21}
+cont(df, 'q21') %>% capture()
+```
+
+##### ANALISE DA TAXA DE ASSERTIVIDADE POR GRUPO (Q12, Q13, Q14, Q16 {q16_0_01, q16_1_01, q16_01_01})
+
+```{r}
+# df$q16_0
+# df$q16_1
+# df$q16_0_01
+# df$q16_1
+# df$q16_1_01
+# df$q16_grau
+# df$q16_01_01
+
+df[['q18_0']] = droplevels(df[['q18_0']])
+#df[['q19']] = droplevels(df[['q19']])
+
+```
+
+
+```{r Tabela de medidas 12, 13, 14, 16_01}
+
+questao = '16_01'
+# Todos os Niveis
+coluna_antiga = paste0('q',questao,'')
+# Grau de Confiança
+coluna_grau = paste0('q',questao,'_grau')
+# Contagem Binaria (Acerto ou Erro)
+coluna_binaria = paste0('q',questao,'_01')
+coluna_analisada = coluna_binaria  #
+
+lista = colunas_demograficas #questoes_acertiva# #questoes_acertiva
+colunas = lista[which(!(lista %in% c(coluna_analisada,coluna_antiga,coluna_binaria)))]
+
+#coluna_analisada = 'q16_01_01'
+#colunas = lista[which(!(lista %in% c('q16_0','q16_1','q16_0_01','q16_1','q16_1_01','q16_grau','q16_01_01')))]
+
+tabelona = summary_numerico_por_grupo_n_parametrico(df, "idade", coluna_analisada)[FALSE, ]
+
+for (coluna in colunas){
+  classe = class(df[[coluna]])[1]
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(df, coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna, coluna_analisada)
+    }
+  }
+  else if (classe == 'character' | classe == 'factor'){
+    tabelinha = conti(df, coluna_analisada, coluna, "row")
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall 100% (", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(df[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_analisada]])[i]
+  percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona1 = tabelona %>% filter(Variable != "0_na_vazio")
+
+##########################################################################################################################
+###### Tabela de analise univariada
+
+tabelona = analise_mod(glm(df[[coluna_analisada]]~df[['idade']], family='binomial'))
+
+tabelona$indice = NA
+tabelona = tabelona[, c("indice", setdiff(names(tabelona), "indice"))]
+tabelona = tabelona[FALSE, ]
+
+for (coluna in colunas){
+  tabelinha = analise_mod(glm(df[[coluna_analisada]]~df[[coluna]], family='binomial'))
+  tabelinha$indice = row.names(tabelinha)
+  tabelinha = tabelinha[, c("indice", setdiff(names(tabelinha), "indice"))]
+  row.names(tabelinha) = 1:nrow(tabelinha)
+  
+  if (class(df[[coluna]]) != "numeric"){
+    tabelinha = rbind(NA, NA, tabelinha) #adicionando linha
+    tabelinha[["indice"]] = c(coluna, levels(as.factor(df[[coluna]])))
+  }
+  else{
+    tabelinha[["indice"]] = coluna
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+tabelona$`Pr(>|z|)` = sapply(tabelona$`Pr(>|z|)`, function(x) ifelse(is.na(x), NA, retorne_p(x)))
+tabelona2 = tabelona %>% filter(indice != "0_na_vazio")
+
+###############################################
+
+tabelona = cbind(tabelona1, tabelona2)
+tabelona$indice = NULL
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona %>% capture()
+
+```
+
+#### ANALISE DA FAMILIARIDADE COM O TEMA
+
+```{r}
+
+coluna_analisada = 'grau_familiaridade2'
+dff = df %>% filter(!!sym(coluna_analisada) != '2. Prefere não dizer')
+dff[[coluna_analisada]] = droplevels(dff[[coluna_analisada]])
+dff$mba = droplevels(dff$mba)
+
+lista = colunas_demograficas#colunas_demograficas #questoes_acertiva
+colunas = lista[which(!(lista %in% c(coluna_analisada, 'grau_familiaridade')))]
+
+tabelona = summary_numerico_por_grupo_n_parametrico(df, "idade", coluna_analisada)[FALSE, ]
+
+for (coluna in colunas){
+  classe = class(dff[[coluna]])[1]
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(dff, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(dff, coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(dff, coluna, coluna_analisada)
+    }
+  }
+  else if (classe == 'character' | classe == 'factor'){
+    tabelinha = conti(dff, coluna_analisada, coluna, "row")
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall 100% (", nrow(dff[complete.cases(dff[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(dff[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(dff[[coluna_analisada]])[i]
+  percent = prop.table(table(dff[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona1 = tabelona %>% filter(Variable != "0_na_vazio")
+
+##########################################################################################################################
+###### Tabela de analise univariada
+
+tabelona = analise_mod(glm(dff[[coluna_analisada]]~dff[['idade']], family='binomial'))
+
+tabelona$indice = NA
+tabelona = tabelona[, c("indice", setdiff(names(tabelona), "indice"))]
+tabelona = tabelona[FALSE, ]
+
+for (coluna in colunas){
+  tabelinha = analise_mod(glm(dff[[coluna_analisada]]~dff[[coluna]], family='binomial'))
+  tabelinha$indice = row.names(tabelinha)
+  tabelinha = tabelinha[, c("indice", setdiff(names(tabelinha), "indice"))]
+  row.names(tabelinha) = 1:nrow(tabelinha)
+  
+  if (class(dff[[coluna]]) != "numeric"){
+    tabelinha = rbind(NA, NA, tabelinha) #adicionando linha
+    tabelinha[["indice"]] = c(coluna, levels(as.factor(dff[[coluna]])))
+  }
+  else{
+    tabelinha[["indice"]] = coluna
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+tabelona$`Pr(>|z|)` = sapply(tabelona$`Pr(>|z|)`, function(x) ifelse(is.na(x), NA, retorne_p(x)))
+tabelona2 = tabelona %>% filter(indice != "0_na_vazio")
+
+###############################################
+
+tabelona = cbind(tabelona1, tabelona2)
+tabelona$indice = NULL
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona %>% capture()
+
+```
+
+##### As pessoas que está mais insatisfeita e quer mudar, estaria disposta a participar de projetos do hospital ? são aquelas que mais tem conhecimento no tema ?
+
+
+```{r}
+#conti(df, 'q20_ar', 'q21_ar', 'row')
+
+coluna_x = 'q21'
+coluna_y = 'q20'
+
+niveis_x = sapply( levels(as.factor(df[[coluna_y]])), function(x) if (!is.na(x)) adicionar_quebra_de_linha(x, 35) else NA)
+niveis_fill = sapply( levels(as.factor(df[[coluna_x]])), function(x) if (!is.na(x)) adicionar_quebra_de_linha(x, 25) else NA)
+
+# Criando tabela de contagem
+grafi = df %>% filter(!is.na(!!sym(coluna_x)) & !is.na(!!sym(coluna_y))) %>% 
+  group_by(!!sym(coluna_y), !!sym(coluna_x)) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n)*100, 2)) #%>% ungroup()
+
+ggplot(grafi, aes(x=as.factor(!!sym(coluna_y)), y=Freq, fill=as.factor(!!sym(coluna_x)))) + 
+  # Grafico
+  geom_bar(stat="identity", position=position_dodge(preserve = 'single'), color='black') +
+  # Outros
+  #geom_text(aes(y=Freq + 3, label = sprintf("%0.1f%%", Freq)), position=position_dodge(0.75), vjust=-0.3) +
+  theme_bw() + theme(legend.position = "bottom") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from=0, to=100, by=10)) +
+  labs(y='Frequency(%)', x='20. Grau de Satisfação...', fill='21. Estaria disposto a participar...') + 
+  scale_x_discrete(labels= niveis_x) +
+  scale_fill_discrete(labels= niveis_fill)
+
+#ggsave("satisfacao_vs_disposicao1.png", height=15, width=25, units="cm", dpi= 600)
+
+tabelona = conti(df, coluna_x, coluna_y, 'row')
+coluna_analisada = coluna_x
+
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall 100% (", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(df[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_analisada]])[i]
+  percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona %>% capture()
+
+```
+
+
+```{r}
+
+coluna_x = 'q21'
+coluna_y = 'q20'
+
+dff = df %>% filter(!!sym(coluna_x) != 'Prefiro não dizer' & !!sym(coluna_y) != 'Prefiro não dizer')
+dff = dff %>% filter(!!sym(coluna_x) != 'Ainda não tenho uma ideia formada a respeito mas gostaria de ouvir mais')
+
+dff[[coluna_x]] = droplevels(dff[[coluna_x]])
+dff[[coluna_y]] = droplevels(dff[[coluna_y]])
+
+levels( dff[[coluna_y]] )
+levels( dff[[coluna_x]] )
+
+niveis_x = sapply( levels(as.factor(dff[[coluna_y]])), function(x) if (!is.na(x)) adicionar_quebra_de_linha(x, 35) else NA)
+niveis_fill = sapply( levels(as.factor(dff[[coluna_x]])), function(x) if (!is.na(x)) adicionar_quebra_de_linha(x, 25) else NA)
+
+# Criando tabela de contagem
+grafi = dff %>% filter(!is.na(!!sym(coluna_x)) & !is.na(!!sym(coluna_y))) %>% 
+  group_by(!!sym(coluna_y), !!sym(coluna_x)) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n)*100, 2)) #%>% ungroup()
+
+ggplot(grafi, aes(x=as.factor(!!sym(coluna_y)), y=Freq, fill=as.factor(!!sym(coluna_x)))) + 
+  # Grafico
+  geom_bar(stat="identity", position=position_dodge(preserve = 'single'), color='black') +
+  # Outros
+  geom_text(aes(y=Freq + 3, label = sprintf("%0.1f%%", Freq)), position=position_dodge(0.75), vjust=-0.3) +
+  theme_bw() + theme(legend.position = "bottom") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from=0, to=100, by=10)) +
+  labs(y='Frequency(%)', x='20. Grau de Satisfação...', fill='21. Estaria disposto a participar...') + 
+  scale_x_discrete(labels= niveis_x) +
+  scale_fill_discrete(labels= niveis_fill)
+
+#ggsave("satisfacao_vs_disposicao2.png", height=15, width=25, units="cm", dpi= 600)
+
+tabelona = conti(dff, coluna_x, coluna_y, sentido_percent = 'row')
+coluna_analisada = coluna_x
+
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall 100% (", nrow(dff[complete.cases(dff[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(dff[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(dff[[coluna_analisada]])[i]
+  percent = prop.table(table(dff[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona %>% capture()
+
+############
+
+analise_mod(glm(dff[[coluna_x]]~dff[[coluna_y]], family='binomial')) %>% capture()
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

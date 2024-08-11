@@ -1,0 +1,197 @@
+```{r}
+#df_back_up = df
+```
+
+
+```{r}
+
+df = df_back_up %>% filter(grau_familiaridade2 != '2_prefere_nao_dizer')
+df$grau_familiaridade2 = df$grau_familiaridade2 %>% factor(labels = c("0_conhece_o_tema","1_nconhece_o_tema"))
+coluna_analisada = 'grau_familiaridade2'
+
+lista_coluna = names(df)[which(!(names(df) %in% c(coluna_analisada,'grau_familiaridade','quando_parou')))]
+tabelona = summary_numerico_por_grupo_n_parametrico("idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])[1]
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+    }
+  }
+  else if (classe == 'character' | classe == 'factor'){
+    tabelinha = conti(df, coluna_analisada, coluna, "col")
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(df[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona %>% capture()
+```
+
+```{r}
+tabelona = analise_mod(glm(grau_familiaridade2~idade, family='binomial', data=df))
+tabelona$indice <- row.names(tabelona)
+tabelona = tabelona[FALSE, ]
+
+for (coluna in lista_coluna){
+  tabelinha = glm(df[[coluna_analisada]]~df[[coluna]], family='binomial', data=df) %>% analise_mod()
+  tabelinha$indice = row.names(tabelinha)
+  row.names(tabelinha) = 1:nrow(tabelinha)
+  tabelinha = tabelinha[, c("indice", setdiff(names(tabelinha), "indice"))]
+  
+  if (class(df[[coluna]]) != "numeric"){
+    tabelinha[1,] = NA
+    tabelinha[["indice"]][1] = coluna
+    tabelinha <- rbind(tabelinha[1, ], NA, tabelinha[-1, ])
+  }
+  else{
+    tabelinha = tabelinha[-1,]
+    tabelinha[["indice"]][1] = coluna
+  }
+  
+  tabelona = rbind(tabelona, tabelinha)
+}
+tabelona$`Pr(>|z|)` = sapply(tabelona$`Pr(>|z|)`, function(x) ifelse(is.na(x), NA, retorne_p(x)))
+tabelona =  tabelona[, c(1, (ncol(tabelona) - 3):ncol(tabelona))]
+
+capture(tabelona)
+```
+
+```{r}
+#df = df %>% filter(grau_familiaridade2 != '2_prefere_nao_dizer')
+
+conti(df, coluna_x, coluna_y)
+
+coluna_x = 'q13'
+coluna_y = 'grau_familiaridade2'
+
+p_value = chisq.test(df[[coluna_y]], df[[coluna_x]])$p.value %>% retorne_p() %>% retorne_p_ajust()
+subtitulo = paste(p_value, '(chisq-squared test)')
+
+grafi = df %>% filter(!is.na(!!sym(coluna_x)) & !is.na(!!sym(coluna_y))) %>% 
+  group_by(!!sym(coluna_y), !!sym(coluna_x)) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n)*100, 2)) %>% ungroup()
+
+ggplot(grafi, aes(x=as.factor(!!sym(coluna_x)), y=Freq, fill=as.factor(!!sym(coluna_y)))) + 
+  geom_bar(stat="identity", position=position_dodge(), color='black') +
+  geom_text(aes(y=Freq + 3, label = sprintf("%0.1f%%", Freq)), 
+            position=position_dodge(0.75), vjust=0) +
+  # Outros
+  theme_bw() + theme(legend.position = "bottom") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from=0, to=100, by=20)) +
+  labs(x=NULL, y='Frequency (%)', subtitle=subtitulo, title=NULL, fill=NULL) 
+###################################################################################################
+ggplot(grafi, aes(x=as.factor(!!sym(coluna_y)), y=Freq, fill=as.factor(!!sym(coluna_x)))) + 
+  geom_bar(stat="identity", position=position_dodge(), color='black') +
+  geom_text(aes(y=Freq + 3, label = sprintf("%0.1f%%", Freq)), 
+            position=position_dodge(0.75), vjust=0) +
+  # Outros
+  theme_bw() + theme(legend.position = "bottom") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from=0, to=100, by=20)) +
+  labs(x=NULL, y='Frequency (%)', subtitle=subtitulo, title=NULL, fill=NULL) 
+
+```
+
+```{r}
+coluna_num = 'idade'
+coluna_cat_y = 'grau_familiaridade2'
+coluna_cat_x = 'q13'
+
+tabela = df %>% filter(!is.na(!!sym(coluna_cat_y))) %>% 
+  group_by(!!sym(coluna_cat_y), !!sym(coluna_cat_x)) %>%
+  summarise(
+    count = n(),
+    min = min(!!sym(coluna_num), na.rm = TRUE),
+    max = max(!!sym(coluna_num), na.rm = TRUE),
+    mean = mean(!!sym(coluna_num), na.rm = TRUE),
+    sd = sd(!!sym(coluna_num), na.rm = TRUE),
+    median = median(!!sym(coluna_num), na.rm = TRUE),
+    q1 = quantile(!!sym(coluna_num), 0.25, na.rm = TRUE),
+    q3 = quantile(!!sym(coluna_num), 0.75, na.rm = TRUE)) %>% 
+  mutate(ymin= mean - sd,
+         ymax= mean + sd)
+tabela$ymin = ifelse(tabela$ymin <= 0, 0.01, tabela$ymin)
+print(tabela)
+
+ggplot(tabela, aes(x=as.factor(!!sym(coluna_cat_x)), y=mean, fill=as.factor(!!sym(coluna_cat_y)))) +
+  # Grafico
+  geom_bar(stat="summary", fun="mean", color='black', position=position_dodge(0.75)) +
+  geom_errorbar(aes(ymin=ymin, ymax=ymax), width=0.3, position=position_dodge(0.75)) +
+  # Outros
+  geom_text(aes(label= round(mean,0)), position= position_dodge(0.75), vjust=-0.1, hjust=-0.1) +
+  theme_bw() + theme(legend.position= "none") +
+  labs(x=NULL, y= "Mean", title=NULL) #+ coord_flip()
+
+```
+
+
+
+```{r}
+
+teste_normalidade = function(dados, coluna, qtd_bins=20){ ##grafico normalidade
+  p_valor = shapiro.test(df[[coluna]])$p.value %>% retorne_p() %>% retorne_p_ajust()
+  media = mean(df[[coluna]], na.rm=T)
+  desvpad = sd(df[[coluna]], na.rm=T)
+  
+  ggplot(df, aes(x=!!sym(coluna)))+
+    geom_histogram(aes(y=..density..), bins= qtd_bins, fill='#40BCD8', colour = "black") +
+    geom_function(fun= dnorm, args=list(mean=media,sd=desvpad), col='black', lwd=1, lty=4) +
+    geom_density(lwd = 1.2, linetype = 2, colour = "blue") +
+    theme_bw() +
+    labs(x=NULL, y='Probability Density', subtitle= paste(p_valor, '(Shapiro-wilk)'))
+}
+
+teste_normalidade(df, 'idade', 30) + labs(title='teste')
+
+```
+
+```{r}
+
+conti_grafi(df, 'q13', 'grau_familiaridade2')
+conti_grafi(df, 'q13', 'grau_familiaridade2', 'row')
+
+```
+
+
+```{r}
+
+box_vin_jit(df, 'idade', 'gasoso')
+
+normalidade_por_grupo_criterio(df,'idade','dm')
+summary_numerico_por_grupo_parametrico('idade','dm','T')
+summary_numerico_por_grupo_n_parametrico('idade','dm','T')
+
+```
+
+```{r}
+cont_grafi(df, 'q17_0') 
+```
+
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+

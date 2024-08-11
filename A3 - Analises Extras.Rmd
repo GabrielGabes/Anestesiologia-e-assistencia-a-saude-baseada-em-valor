@@ -1,0 +1,162 @@
+
+```{r}
+
+df %>% group_by(aonde_trabalha_0, aonde_trabalha_1, aonde_trabalha_2, aonde_trabalha_3, aonde_trabalha_4) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n)*100, 2)) %>% ungroup() %>% capture()
+
+```
+```{r}
+conti(df, 'autonomo_assalariado', 'setor_que_trabalha')
+```
+
+```{r}
+
+coluna_analisada = 'q11_4'
+lista = colunas_demograficas #questoes_acertiva# #questoes_acertiva
+colunas = lista[which(!(lista %in% c(coluna_analisada)))]
+
+#coluna_analisada = 'q16_01_01'
+#colunas = lista[which(!(lista %in% c('q16_0','q16_1','q16_0_01','q16_1','q16_1_01','q16_grau','q16_01_01')))]
+
+tabelona = summary_numerico_por_grupo_n_parametrico(df, "idade", coluna_analisada)[FALSE, ]
+
+for (coluna in colunas){
+  classe = class(df[[coluna]])[1]
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(df, coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna, coluna_analisada)
+    }
+  }
+  else if (classe == 'character' | classe == 'factor'){
+    tabelinha = conti(df, coluna_analisada, coluna, "col")
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall 100% (", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(as.factor(df[[coluna_analisada]]))
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_analisada]])[i]
+  percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona1 = tabelona %>% filter(Variable != "0_na_vazio")
+
+##########################################################################################################################
+###### Tabela de analise univariada
+
+tabelona = analise_mod(glm(df[[coluna_analisada]]~df[['idade']], family='binomial'))
+
+tabelona$indice = NA
+tabelona = tabelona[, c("indice", setdiff(names(tabelona), "indice"))]
+tabelona = tabelona[FALSE, ]
+
+for (coluna in colunas){
+  tabelinha = analise_mod(glm(df[[coluna_analisada]]~df[[coluna]], family='binomial'))
+  tabelinha$indice = row.names(tabelinha)
+  tabelinha = tabelinha[, c("indice", setdiff(names(tabelinha), "indice"))]
+  row.names(tabelinha) = 1:nrow(tabelinha)
+  
+  if (class(df[[coluna]]) != "numeric"){
+    tabelinha = rbind(NA, NA, tabelinha) #adicionando linha
+    tabelinha[["indice"]] = c(coluna, levels(as.factor(df[[coluna]])))
+  }
+  else{
+    tabelinha[["indice"]] = coluna
+  }
+  tabelona = rbind(tabelona, tabelinha)
+}
+tabelona$`Pr(>|z|)` = sapply(tabelona$`Pr(>|z|)`, function(x) ifelse(is.na(x), NA, retorne_p(x)))
+tabelona2 = tabelona %>% filter(indice != "0_na_vazio")
+
+###############################################
+
+tabelona = cbind(tabelona1, tabelona2)
+tabelona$indice = NULL
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona %>% capture()
+
+```
+
+
+```{r Graficos dos graus de confiança}
+
+df_sel_12 = df[,c('q12_01','q12_grau')]
+names(df_sel_12) = c('acertividade','grau')
+df_sel_12$questao = 'Question 12'
+df_sel_13 = df[,c('q13_01','q13_grau')]
+names(df_sel_13) = c('acertividade','grau')
+df_sel_13$questao = 'Question 13'
+df_sel_14 = df[,c('q14_01','q14_grau')]
+names(df_sel_14) = c('acertividade','grau')
+df_sel_14$questao = 'Question 14'
+df_sel_16 = df[,c('q16_01_01','q16_grau')]
+names(df_sel_16) = c('acertividade','grau')
+df_sel_16$questao = 'Question 16'
+
+df_sel = rbind(df_sel_12,df_sel_13,df_sel_14,df_sel_16)
+
+ggplot(df_sel, aes(x=questao, y=grau, fill=acertividade)) + 
+  #geom_violin(alpha=0.2, position = position_dodge(width = 0.75), show.legend=T, width=1.2) +
+  geom_boxplot(alpha=0.8, position = position_dodge(width = 0.75), show.legend=T, width=0.2) + 
+  labs(x=NULL, y='Degree of confidence in the answer', fill=NULL) + 
+  theme_classic() + theme(legend.position = "bottom") + 
+  scale_fill_manual(values=c("grey30","grey"),
+                    labels=c('Incorrect Answer','Right answer')) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20))
+
+ggsave("Questions_and_degrees.png", height=10, width=15, units="cm", dpi= 600)
+
+```
+```{r}
+capture = function(tabela){
+  tabela %>% print() %>% write_clip(dec=",", col.names=F)
+}
+
+tab_0 = cont(df, 'q17_0') %>% t() %>% as.data.frame()
+tab_1 = cont(df, 'q17_1') %>% t() %>% as.data.frame()
+tab_2 = cont(df, 'q17_2') %>% t() %>% as.data.frame()
+tab_3 = cont(df, 'q17_3') %>% t() %>% as.data.frame()
+tab_4 = cont(df, 'q17_4') %>% t() %>% as.data.frame()
+tab_5 = cont(df, 'q17_5') %>% t() %>% as.data.frame()
+tab_6 = cont(df, 'q17_6') %>% t() %>% as.data.frame()
+tab_7 = cont(df, 'q17_7') %>% t() %>% as.data.frame()
+
+tab_list = list(tab_0, tab_1, tab_2, tab_3, tab_4, tab_5, tab_6, tab_7)
+
+# Concatena todos os dataframes verticalmente
+tab_final = bind_rows(tab_list)
+tab_final %>% capture()
+
+```
+```{r}
+capture = function(tabela){
+  tabela %>% print() %>% write_clip(dec=",", col.names=F)
+}
+
+tab_0 = cont(df, 'q17_0_5') %>% t() %>% as.data.frame()
+tab_1 = cont(df, 'q17_1_5') %>% t() %>% as.data.frame()
+tab_2 = cont(df, 'q17_2_5') %>% t() %>% as.data.frame()
+tab_3 = cont(df, 'q17_3_5') %>% t() %>% as.data.frame()
+tab_4 = cont(df, 'q17_4_5') %>% t() %>% as.data.frame()
+tab_5 = cont(df, 'q17_5_5') %>% t() %>% as.data.frame()
+tab_6 = cont(df, 'q17_6_5') %>% t() %>% as.data.frame()
+tab_7 = cont(df, 'q17_7_5') %>% t() %>% as.data.frame()
+
+tab_list = list(tab_0, tab_1, tab_2, tab_3, tab_4, tab_5, tab_6, tab_7)
+
+# Concatena todos os dataframes verticalmente
+tab_final = bind_rows(tab_list)
+tab_final %>% capture()
+```
+```{r}
+df$q18
+```
+

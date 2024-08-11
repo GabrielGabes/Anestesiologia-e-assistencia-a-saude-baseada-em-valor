@@ -1,0 +1,101 @@
+#### Analise de quando o participante parou de responder
+
+
+```{r}
+df = df_respondentes
+```
+
+
+```{r Quando parou de responder}
+coluna = "quando_parou"
+tabela = df %>% filter(quando_parou != "Respondentes")  %>% group_by(!!sym(coluna)) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n)*100, 2)) %>% ungroup()
+
+ggplot(tabela, aes(as.factor(!!sym(coluna)), Freq, label=Freq, fill=as.factor(!!sym(coluna)))) + 
+  geom_col(show.legend = FALSE, color="black") + 
+  geom_text(aes(y=Freq, label = sprintf("%0.1f%%", Freq), vjust=-0.1)) + 
+  scale_y_continuous(limits = c(0, 25), breaks=seq(from = 0, to = 100, by = 5)) +
+  theme_bw() +
+  labs(x="Question", y="Frequency (%)", title ='When you stopped responding')
+
+#ggsave("em_qual_questao_parou.png", height=10, width=15, units="cm", dpi= 600)
+```
+
+
+```{r Perfil Demografico}
+coluna_analisada = 'respondeu'
+tabelona = summary_numerico_por_grupo_n_parametrico(df, "idade", coluna_analisada)[FALSE, ]
+
+for (coluna in colunas_demograficas){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(df, coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna, coluna_analisada)
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna)
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  n = table(df[[coluna_analisada]])[i]
+  percent = prop.table(table(df[[coluna_analisada]]))[i]*100
+  percent = rround(percent, 2)
+  percent = paste0(percent, '%')
+  texto = paste0(nivel, ' ', percent, " (n=", n, ")")
+  colnames(tabelona)[colnames(tabelona) == nivel] = texto}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('aonde_trabalha_',1:4), paste0('outros_campos_',1:6)))
+tabelona = tabelona %>% filter(!Variable %in% c(paste0('q11_',1:5), paste0('outros_campos_',1:6)))
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+```
+
+
+```{r Outras questões}
+coluna_analisada = 'respondeu'
+lista_coluna = c('grau_familiaridade','grau_familiaridade2')
+
+tabelona = summary_numerico_por_grupo_n_parametrico(df, "idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_parametrico(df, coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(df, coluna, coluna_analisada)
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna)
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+```
+
+
+```{r}
+df = df_backup
+```
+

@@ -1,0 +1,514 @@
+```{r}
+
+tabela0 <- tibble(
+  q12_grau = c(20, 40, 60, 80, 100),
+  proporcao = c(0.2, 0.4, 0.6, 0.8, 1),
+  tipo = 'Perfect Calibration'
+)
+tabela0
+
+```
+```{r}
+coluna = 'cargo'
+
+tabela = df %>% filter(!is.na(q12_grau)) %>% 
+  group_by(cargo, q12_grau) %>% summarise(Freq = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+
+ggplot(tabela, aes(x=as.factor(q12_grau), y=Freq, fill=as.factor(cargo))) +
+  # Grafico
+  geom_bar(stat="identity", position=position_dodge(), color='black') +
+  # Outros
+  geom_text(aes(label= round(mean,0)), position= position_dodge(0.75), vjust=-0.1, hjust=-0.1) +
+  theme_bw() + theme(legend.position= "bottom") +
+  labs(x=NULL, y= "Mean", title=NULL) #+ coord_flip()
+
+tabela$q12_grau
+tabela$proporcao
+
+cor.test(tabela$q12_grau, tabela$proporcao, method = "spearman")
+
+########################################
+
+tabela = table(df$cargo, df$q12_01) 
+tabela
+tabela %>% chisq.test()
+
+
+
+```
+
+
+```{r q12}
+
+conti(df, "q12_01", 'q12_grau', 'row') %>% capture()
+tabela = df %>% filter(!is.na(q12_grau)) %>% 
+  group_by(q12_grau) %>% summarise(proporcao = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela$tipo = "Geral"
+
+##############################################
+
+conti(df %>% filter(cargo == 'Anestesiologista formado'), "q12_01", 'q12_grau', 'row')
+tabela1 = df %>% filter(!is.na(q12_grau)) %>% filter(cargo == 'Anestesiologista formado') %>% 
+  group_by(q12_grau) %>% summarise(proporcao = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = "Anestesiologista formado"
+
+
+conti(df %>% filter(cargo == 'Residente'), "q12_01", 'q12_grau', 'row')
+tabela2 = df %>% filter(!is.na(q12_grau)) %>% filter(cargo == 'Residente') %>% 
+  group_by(q12_grau) %>% summarise(proporcao = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = "Residente"
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Anestesiologista formado","Residente"))
+
+
+ggplot(dados, aes(x=q12_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q12', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Anestesiologista formado" = "red", 
+                                "Residente" = "#2ca02c"))
+ggsave("Q12_calibracao1.png", height=10, width=13, units="cm", dpi= 600)
+
+#############################################################################
+levels(df$grau_familiaridade2)
+cont(df, "grau_familiaridade2")
+
+
+conti(df %>% filter(grau_familiaridade2=="0_conhece_o_tema"), "q12_01", 'q12_grau', 'row')
+tabela1 = df %>% filter(!is.na(q12_grau)) %>% filter(grau_familiaridade2=="0_conhece_o_tema") %>% 
+  group_by(q12_grau) %>% summarise(proporcao = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+nome_nivel1 = "Não conhece o tema"
+tabela1$tipo = nome_nivel1
+
+conti(df %>% filter(grau_familiaridade2=="1_nconhece_o_tema"), "q12_01", 'q12_grau', 'row')
+tabela2 = df %>% filter(!is.na(q12_grau)) %>% filter(grau_familiaridade2=="1_nconhece_o_tema") %>% 
+  group_by(q12_grau) %>% summarise(proporcao = sum(q12_01=="Resposta Correta", na.rm=TRUE) / n())
+nome_nivel2 = "Conhece o tema"
+tabela2$tipo = nome_nivel2
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Conhece o Tema","Não conhece o Tema"))
+
+ggplot(dados, aes(x=q12_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q12', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Conhece o Tema" = "red", 
+                                "Não conhece o Tema" = "#2ca02c"))
+ggsave("Q12_calibracao2.png", height=10, width=13, units="cm", dpi= 600)
+
+```
+
+
+```{r q13}
+
+names(tabela0)[1] <- "q13_grau"
+
+conti(df, "q13_01", 'q13_grau', 'row') %>% capture()
+tabela = df %>% filter(!is.na(q13_grau)) %>% 
+  group_by(q13_grau) %>% summarise(proporcao = sum(q13_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela$tipo = "Geral"
+
+##############################################
+
+conti(df %>% filter(cargo == 'Anestesiologista formado'), "q13_01", 'q13_grau', 'row')
+tabela1 = df %>% filter(!is.na(q13_grau)) %>% filter(cargo == 'Anestesiologista formado') %>% 
+  group_by(q13_grau) %>% summarise(proporcao = sum(q13_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = "Anestesiologista formado"
+
+conti(df %>% filter(cargo == 'Residente'), "q13_01", 'q13_grau', 'row')
+tabela2 = df %>% filter(!is.na(q13_grau)) %>% filter(cargo == 'Residente') %>% 
+  group_by(q13_grau) %>% summarise(proporcao = sum(q13_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = "Residente"
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Anestesiologista formado","Residente"))
+
+
+ggplot(dados, aes(x=q13_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q13', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Anestesiologista formado" = "red", 
+                                "Residente" = "#2ca02c"))
+ggsave("Q13_calibracao1.png", height=10, width=13, units="cm", dpi= 600)
+
+#############################################################################
+levels(df$grau_familiaridade2)
+cont(df, "grau_familiaridade2")
+
+conti(df %>% filter(grau_familiaridade2=="0_conhece_o_tema"), "q13_01", 'q13_grau', 'row')
+tabela1 = df %>% filter(!is.na(q13_grau)) %>% filter(grau_familiaridade2=="0_conhece_o_tema") %>% 
+  group_by(q13_grau) %>% summarise(proporcao = sum(q13_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = nome_nivel1
+
+conti(df %>% filter(grau_familiaridade2=="1_nconhece_o_tema"), "q13_01", 'q13_grau', 'row')
+tabela2 = df %>% filter(!is.na(q13_grau)) %>% filter(grau_familiaridade2=="1_nconhece_o_tema") %>% 
+  group_by(q13_grau) %>% summarise(proporcao = sum(q13_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = nome_nivel2
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Conhece o Tema","Não conhece o Tema"))
+
+ggplot(dados, aes(x=q13_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q13', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Conhece o Tema" = "red", 
+                                "Não conhece o Tema" = "#2ca02c"))
+ggsave("Q13_calibracao2.png", height=10, width=13, units="cm", dpi= 600)
+
+
+```
+
+```{r q14}
+
+names(tabela0)[1] <- "q14_grau"
+
+conti(df, "q14_01", 'q14_grau', 'row') %>% capture()
+tabela = df %>% filter(!is.na(q14_grau)) %>% 
+  group_by(q14_grau) %>% summarise(proporcao = sum(q14_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela$tipo = "Geral"
+
+##############################################
+
+conti(df %>% filter(cargo == 'Anestesiologista formado'), "q14_01", 'q14_grau', 'row')
+tabela1 = df %>% filter(!is.na(q14_grau)) %>% filter(cargo == 'Anestesiologista formado') %>% 
+  group_by(q14_grau) %>% summarise(proporcao = sum(q14_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = "Anestesiologista formado"
+
+conti(df %>% filter(cargo == 'Residente'), "q14_01", 'q14_grau', 'row')
+tabela2 = df %>% filter(!is.na(q14_grau)) %>% filter(cargo == 'Residente') %>% 
+  group_by(q14_grau) %>% summarise(proporcao = sum(q14_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = "Residente"
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Anestesiologista formado","Residente"))
+
+
+ggplot(dados, aes(x=q14_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q14', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Anestesiologista formado" = "red", 
+                                "Residente" = "#2ca02c"))
+ggsave("Q14_calibracao1.png", height=10, width=14, units="cm", dpi= 600)
+
+#############################################################################
+levels(df$grau_familiaridade2)
+cont(df, "grau_familiaridade2")
+
+conti(df %>% filter(grau_familiaridade2=="0_conhece_o_tema"), "q14_01", 'q14_grau', 'row')
+tabela1 = df %>% filter(!is.na(q14_grau)) %>% filter(grau_familiaridade2=="0_conhece_o_tema") %>% 
+  group_by(q14_grau) %>% summarise(proporcao = sum(q14_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = nome_nivel1
+
+conti(df %>% filter(grau_familiaridade2=="1_nconhece_o_tema"), "q14_01", 'q14_grau', 'row')
+tabela2 = df %>% filter(!is.na(q14_grau)) %>% filter(grau_familiaridade2=="1_nconhece_o_tema") %>% 
+  group_by(q14_grau) %>% summarise(proporcao = sum(q14_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = nome_nivel2
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Conhece o Tema","Não conhece o Tema"))
+
+ggplot(dados, aes(x=q14_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q14', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Conhece o Tema" = "red", 
+                                "Não conhece o Tema" = "#2ca02c"))
+ggsave("Q14_calibracao2.png", height=10, width=14, units="cm", dpi= 600)
+
+
+```
+
+
+```{r q16}
+
+names(tabela0)[1] <- "q16_grau"
+
+conti(df, "q16_01_01", 'q16_grau', 'row') %>% capture()
+tabela = df %>% filter(!is.na(q16_grau)) %>% 
+  group_by(q16_grau) %>% summarise(proporcao = sum(q16_01_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela$tipo = "Geral"
+
+##############################################
+
+conti(df %>% filter(cargo == 'Anestesiologista formado'), "q16_01_01", 'q16_grau', 'row')
+tabela1 = df %>% filter(!is.na(q16_grau)) %>% filter(cargo == 'Anestesiologista formado') %>% 
+  group_by(q16_grau) %>% summarise(proporcao = sum(q16_01_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = "Anestesiologista formado"
+
+conti(df %>% filter(cargo == 'Residente'), "q16_01_01", 'q16_grau', 'row')
+tabela2 = df %>% filter(!is.na(q16_grau)) %>% filter(cargo == 'Residente') %>% 
+  group_by(q16_grau) %>% summarise(proporcao = sum(q16_01_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = "Residente"
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Anestesiologista formado","Residente"))
+
+
+ggplot(dados, aes(x=q16_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q16', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Anestesiologista formado" = "red", 
+                                "Residente" = "#2ca02c"))
+ggsave("Q16_calibracao1.png", height=10, width=16, units="cm", dpi= 600)
+
+#############################################################################
+levels(df$grau_familiaridade2)
+cont(df, "grau_familiaridade2")
+
+conti(df %>% filter(grau_familiaridade2=="0_conhece_o_tema"), "q16_01_01", 'q16_grau', 'row')
+tabela1 = df %>% filter(!is.na(q16_grau)) %>% filter(grau_familiaridade2=="0_conhece_o_tema") %>% 
+  group_by(q16_grau) %>% summarise(proporcao = sum(q16_01_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela1$tipo = nome_nivel1
+
+conti(df %>% filter(grau_familiaridade2=="1_nconhece_o_tema"), "q16_01_01", 'q16_grau', 'row')
+tabela2 = df %>% filter(!is.na(q16_grau)) %>% filter(grau_familiaridade2=="1_nconhece_o_tema") %>% 
+  group_by(q16_grau) %>% summarise(proporcao = sum(q16_01_01=="Resposta Correta", na.rm=TRUE) / n())
+tabela2$tipo = nome_nivel2
+
+dados = rbind(tabela0, tabela, tabela1, tabela2)
+dados$proporcao = dados$proporcao*100
+dados$tipo <- factor(dados$tipo, levels = c('Perfect Calibration',"Geral","Conhece o Tema","Não conhece o Tema"))
+
+ggplot(dados, aes(x=q16_grau, y=proporcao, color=tipo)) + 
+  geom_point(alpha=0.5, size=2.5) + 
+  geom_line() +
+  theme_bw() + theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  scale_y_continuous(limits = c(0, 100), breaks=seq(from = 0, to = 100, by = 20)) +
+  labs(x='Confidence (%)', y='Accuracy (%)', title='Q16', color=NULL) +
+  scale_color_manual(values = c('Perfect Calibration'="black",
+                                "Geral" = "blue", 
+                                "Conhece o Tema" = "red", 
+                                "Não conhece o Tema" = "#2ca02c"))
+ggsave("Q16_calibracao2.png", height=10, width=16, units="cm", dpi= 600)
+
+
+```
+
+#############################################################################
+
+```{r Coluna demografica}
+lista_coluna_demo = c('cargo',
+                 'idade',
+                 'tempo_formado',
+                 'regiao',
+                 'aonde_trabalha_0', 'aonde_trabalha_1', 'aonde_trabalha_2', 'aonde_trabalha_3', 'aonde_trabalha_4',
+                 'hospital_escola',
+                 'hospital_acreditado',
+                 'outros_campos_0','outros_campos_1','outros_campos_2',
+                 'outros_campos_3','outros_campos_4','outros_campos_5','outros_campos_6',
+                 'mba')
+```
+
+
+
+```{r q12_01}
+
+coluna_analisada =  'q12_01'  #'coluna_aleatoria'
+lista_coluna = append(lista_coluna_demo, questoes_acertiva[-which(questoes_acertiva==coluna_analisada)])
+
+
+cont(df, coluna_analisada)
+
+tabelona = summary_numerico_por_grupo_n_parametrico("idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna, "col")
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+#conti(df, 'q12_01', 'q16_01_01', 'row') %>% print() %>% write_clip(dec = ".", col.names = FALSE)
+
+```
+
+```{r q13_01}
+
+coluna_analisada =  'q13_01'  #'coluna_aleatoria'
+lista_coluna = append(lista_coluna_demo, questoes_acertiva[-which(questoes_acertiva==coluna_analisada)])
+
+
+cont(df, coluna_analisada)
+
+tabelona = summary_numerico_por_grupo_n_parametrico("idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna, "row")
+    tabelinha %>% print()
+    
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+conti(df, 'q13_01', 'q16_01_01', 'row') %>% print() %>% write_clip(dec = ".", col.names = FALSE)
+
+```
+
+```{r q14_01}
+
+coluna_analisada =  'q14_01'  #'coluna_aleatoria'
+lista_coluna = append(lista_coluna_demo, questoes_acertiva[-which(questoes_acertiva==coluna_analisada)])
+
+
+cont(df, coluna_analisada)
+
+tabelona = summary_numerico_por_grupo_n_parametrico("idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna, "row")
+    tabelinha %>% print()
+    
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+#conti(df, 'q14_01', 'q16_01_01', 'row') %>% print() %>% write_clip(dec = ".", col.names = FALSE)
+
+```
+
+```{r}
+
+coluna_analisada =  'q16_01_01'  #'coluna_aleatoria'
+lista_coluna = append(lista_coluna_demo, questoes_acertiva[-which(questoes_acertiva==coluna_analisada)])
+
+
+cont(df, coluna_analisada)
+
+tabelona = summary_numerico_por_grupo_n_parametrico("idade", coluna_analisada)[FALSE, ]
+
+for (coluna in lista_coluna){
+  classe = class(df[[coluna]])
+  if (classe == "numeric"){
+    if (normalidade_por_grupo_criterio(df, coluna, coluna_analisada) == TRUE){
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    else{
+      tabelinha = summary_numerico_por_grupo_n_parametrico(coluna, coluna_analisada)
+      tabelinha %>% print()
+    }
+    tabelona = rbind(tabelona, tabelinha)
+  }
+  else{
+    tabelinha = conti(df, coluna_analisada, coluna, "row")
+    tabelinha %>% print()
+    
+    tabelona = rbind(tabelona, tabelinha)
+  }
+}
+colnames(tabelona)[colnames(tabelona) == "Overall"] = paste0("Overall (n=", nrow(df[complete.cases(df[[coluna_analisada]]), ]), ")")
+niveis = levels(df[[coluna_analisada]])
+for (i in 1:length(niveis)){
+  nivel = niveis[i]
+  colnames(tabelona)[colnames(tabelona) == nivel] = paste0(nivel, " (n=", table(df[[coluna_analisada]])[i], ")")}
+
+tabelona = tabelona %>% filter(Variable != "0_na_vazio")
+tabelona %>% capture()
+
+```
+
+```{r}
+
+
+```

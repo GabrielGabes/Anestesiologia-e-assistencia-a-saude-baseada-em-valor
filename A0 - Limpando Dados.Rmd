@@ -1,0 +1,483 @@
+```{r Importando Base}
+df <- read_excel("Arquivos originais/df_limpo.xlsx")
+
+df = df[-(1:3), ] # excluir a primeira linha
+nrow(df)
+
+# Excluindo nivel que iria atrapalhar todas as analises.
+# df = df %>% filter(cargo != "Prefiro não dizer")
+#df$cargo = factor(df$cargo, levels=c('Residente','Anestesiologista formado'))
+# df = df %>% filter(regiao != "Prefiro não dizer")
+# df = df %>% filter(mba != "Prefiro não dizer")
+
+# Individuos que não responderam por inteiro a ficha padrão
+# Deixando no trabalho apenas o participantes que pelo menos preencheram o ficha padrão ####
+df = df %>% filter(quando_parou >= 10 | is.na(quando_parou))
+
+nrow(df)
+```
+
+
+```{r Excluindo variaveis desnecessarias}
+df$id = NULL
+df$controle = NULL
+
+# df = df %>% select(-starts_with("ex..."))
+cols_to_remove <- grep("^ex\\.\\.\\.", names(df))
+df <- df[, -cols_to_remove]
+
+df
+```
+
+
+```{r}
+df$count_vazio = as.numeric(df$count_vazio)
+df$count_vazio = NULL
+
+df$idade = as.numeric(gsub(" anos", "", df$idade))
+
+df$tempo_formado = gsub(" anos", "", df$tempo_formado)
+df$tempo_formado = gsub("anos", "", df$tempo_formado)
+df$tempo_formado[df$tempo_formado == "10 meses"] = 10/12
+df$tempo_formado = as.numeric(df$tempo_formado)
+
+```
+
+```{r Transformando dados de grau de confiança em numericos}
+#unique(df$q12_grau)
+df$q12_grau = as.numeric(gsub("%", "", df$q12_grau))
+#unique(df$q13_grau)
+df$q13_grau = as.numeric(gsub("%", "", df$q13_grau))
+#unique(df$q14_grau)
+df$q14_grau = as.numeric(gsub("%", "", df$q14_grau))
+#unique(df$q16_grau)
+df$q16_grau = as.numeric(gsub("%", "", df$q16_grau))
+```
+
+
+```{r Criando variaveis novas}
+coluna_antiga = "q12"
+coluna_analisada = 'q12_01'
+coluna_n = 'q12_grau'
+#df[[paste0(coluna_n,'_factor')]] = df[[coluna_n]] %>% as.factor()
+df[[coluna_analisada]] = ifelse(df[[coluna_antiga]] == "Fee for service, sendo remunerado pelo volume de atendimentos",'Resposta Correta','Resposta Incorreta')
+
+################################################################################
+
+coluna_antiga = "q13"
+coluna_analisada = 'q13_01'
+coluna_n = 'q13_grau'
+#df[[paste0(coluna_n,'_factor')]] = df[[coluna_n]] %>% as.factor()
+df[[coluna_analisada]] = ifelse(df[[coluna_antiga]] == "Bundle",'Resposta Correta','Resposta Incorreta')
+
+################################################################################
+
+coluna_antiga = "q14"
+coluna_analisada = 'q14_01'
+coluna_n = 'q14_grau'
+#df[[paste0(coluna_n,'_factor')]] = df[[coluna_n]] %>% as.factor()
+df[[coluna_analisada]] = ifelse(df[[coluna_antiga]] == "São os desfechos em saúde",'Resposta Correta','Resposta Incorreta')
+
+################################################################################
+
+coluna_n = 'q16_grau'
+coluna_antiga = "q16_0"
+coluna_analisada = 'q16_0_01'
+#df[[paste0(coluna_n,'_factor')]] = df[[coluna_n]] %>% as.factor()
+df[[coluna_analisada]] = ifelse(df[[coluna_antiga]] == "Desfechos",'Resposta Correta','Resposta Incorreta')
+
+#######################################
+
+coluna_antiga = "q16_1"
+coluna_analisada = 'q16_1_01'
+df[[coluna_analisada]] = ifelse(df[[coluna_antiga]] == "Custo",'Resposta Correta','Resposta Incorreta')
+
+#######################################
+
+coluna_analisada = 'q16_01_01'
+df[[coluna_analisada]] = NA
+df[[coluna_analisada]][df$q16_0_01 != 'Resposta Correta' | df$q16_1_01 != 'Resposta Correta'] = 'Resposta Incorreta'
+df[[coluna_analisada]][df$q16_0_01 == 'Resposta Correta' & df$q16_1_01 == 'Resposta Correta'] = 'Resposta Correta'
+
+################################################################################
+lista_colunas = c('q12_01','q13_01','q14_01','q16_0_01','q16_1_01','q16_01_01')
+for (coluna_analisada in lista_colunas){
+  df[[coluna_analisada]] = factor(df[[coluna_analisada]], 
+                                levels=c('Resposta Incorreta','Resposta Correta'))
+}
+```
+
+
+```{r Novas variaveis de Idade}
+summary(df$idade)
+
+df$idade_10em10 = NA
+df$idade_10em10[df$idade < 30] = '0. ≤29'
+df$idade_10em10[df$idade >= 30 & df$idade < 40] = '1. 30-39'
+df$idade_10em10[df$idade >= 40 & df$idade < 50] = '2. 40-49'
+df$idade_10em10[df$idade >= 50 & df$idade < 60] = '3. 50-59'
+df$idade_10em10[df$idade >= 60] = '4. ≥60'
+cont(df, 'idade_10em10')
+#
+df$idade_geracao = NA
+df$idade_geracao[df$idade < 35] = '0. Y (21-34)'
+df$idade_geracao[df$idade >= 35 & df$idade < 50] = '1. X (35-49)'
+df$idade_geracao[df$idade >= 50 & df$idade < 65] = '2. Baby Boomers (50-64)'
+df$idade_geracao[df$idade >= 65] = '3. Silenciosa (≥65)'
+cont(df, 'idade_geracao')
+#
+df$idade_40 = ifelse(df$idade >= 40, '1. ≥40', '0. <40') %>% as.factor()
+cont(df, 'idade_40')
+#
+df$idade_60 = ifelse(df$idade >= 60, '1. ≥60', '0. <60') %>% as.factor()
+cont(df, 'idade_60')
+#
+```
+
+
+```{r Novas variaveis de tempo de formação}
+df$tempo_formado %>% summary()
+#
+df$tempo_formado_cat = NA
+df$tempo_formado_cat[df$tempo_formado <= 4] = '0. ≤4'
+df$tempo_formado_cat[df$tempo_formado > 4 & df$tempo_formado < 10] = '1. 5-10'
+df$tempo_formado_cat[df$tempo_formado >= 10] = '2. ≥10'
+cont(df, 'tempo_formado_cat')
+#
+df$tempo_formado_10em10 = NA
+df$tempo_formado_10em10[df$tempo_formado < 10] = '0. <10'
+df$tempo_formado_10em10[df$tempo_formado >= 10 & df$tempo_formado < 20] = '1. 10-19'
+df$tempo_formado_10em10[df$tempo_formado >= 20 & df$tempo_formado < 30] = '2. 20-29'
+df$tempo_formado_10em10[df$tempo_formado >= 30 & df$tempo_formado < 40] = '3. 30-39'
+df$tempo_formado_10em10[df$tempo_formado >= 40 & df$tempo_formado < 50] = '4. 40-49'
+df$tempo_formado_10em10[df$tempo_formado >= 50 & df$tempo_formado < 60] = '5. 50-59'
+df$tempo_formado_10em10[df$tempo_formado >= 60] = '6. ≥60'
+cont(df, 'tempo_formado_10em10')
+#
+# df$tempo_formado_cat2 = NA
+# df$tempo_formado_cat2[df$tempo_formado < 10] = '0. <10'
+# df$tempo_formado_cat2[df$tempo_formado >= 10 & df$tempo_formado < 20] = '1. 10-19'
+# df$tempo_formado_cat2[df$tempo_formado >= 20 & df$tempo_formado < 30] = '2. 20-29'
+# df$tempo_formado_cat2[df$tempo_formado >= 30 & df$tempo_formado < 40] = '3. 30-39'
+# df$tempo_formado_cat2[df$tempo_formado >= 40 & df$tempo_formado < 50] = '4. 40-49'
+# df$tempo_formado_cat2[df$tempo_formado >= 50] = '5. ≥50'
+# cont(df, 'tempo_formado_cat2')
+
+```
+
+
+```{r Criando novas variaveis}
+
+df$respondeu = ifelse(is.na(df$quando_parou), "Respondentes", 'Não Respondentes') %>% as.factor()
+cont(df, 'quando_parou')
+cont(df, 'respondeu')
+#
+df$grau_familiaridade = df$grau_familiaridade %>% as.factor()
+df$grau_familiaridade %>% levels()
+
+df$grau_familiaridade2 = NA
+df$grau_familiaridade2[df$grau_familiaridade == 'Sou entusiasta do tema e procuro me manter atualizado sobre as iniciativas envolvendo VBHC'] = '1. Conhece o Tema'
+df$grau_familiaridade2[df$grau_familiaridade == 'Interesso-me pelo tema e já li alguns artigos ou assisti palestras sobre o tema'] = '1. Conhece o Tema'
+df$grau_familiaridade2[df$grau_familiaridade == 'Interesso-me pelo tema mas nunca li artigos e nem assisti palestras sobre o tema'] = '1. Conhece o Tema'
+df$grau_familiaridade2[df$grau_familiaridade == 'Tive pouco contato com o tema e não me sinto confortável em discuti-lo'] = '0. Não Conhece o Tema'
+df$grau_familiaridade2[df$grau_familiaridade == 'Não tenho conhecimento sobre o tema'] = '0. Não Conhece o Tema'
+df$grau_familiaridade2[df$grau_familiaridade == 'Prefiro não dizer'] = '2. Prefere não dizer'
+
+df$grau_familiaridade2 = as.factor(df$grau_familiaridade2)
+levels(df$grau_familiaridade2)
+
+cont(df, 'grau_familiaridade')
+cont(df, 'grau_familiaridade2')
+
+```
+
+
+```{r Arrumando niveis das variaveis}
+# count = 1
+# for (coluna in names(df)){
+#   classe = class(df[[coluna]])
+#   if (classe == "factor" | classe == 'character'){
+#     count = 1
+#     print(paste("========", coluna, "========"))
+#     print(paste("df$ =factor(df$",coluna,", levels=c())"))
+#     
+#     cont(df, coluna) %>% print()
+#   }
+# }
+
+df$cargo =factor(df$cargo, levels=c("Anestesiologista formado","Residente","Prefiro não dizer"))
+
+df$regiao =factor(df$regiao, levels=c("Norte","Nordeste","Centro-Oeste","Sudeste","Sul","Prefiro não dizer"))
+
+####
+lista_coluna = c('aonde_trabalha_0', 'aonde_trabalha_1', 'aonde_trabalha_2', 'aonde_trabalha_3', 'aonde_trabalha_4')
+for (coluna in lista_coluna){df[[coluna]][is.na(df[[coluna]])] = "0_na_vazio"}
+df$aonde_trabalha_0 =factor(df$aonde_trabalha_0, levels=c("0_na_vazio","Hospital privado – como contratado assalariado"))
+df$aonde_trabalha_1 =factor(df$aonde_trabalha_1, levels=c("0_na_vazio","Hospital privado – como autônomo"))
+df$aonde_trabalha_2 =factor(df$aonde_trabalha_2, levels=c("0_na_vazio","Hospital público – como contratado assalariado"))
+df$aonde_trabalha_3 =factor(df$aonde_trabalha_3, levels=c("0_na_vazio","Hospital público – como autônomo"))
+df$aonde_trabalha_4 =factor(df$aonde_trabalha_4, levels=c("0_na_vazio","Prefiro não dizer"))
+
+df$hospital_escola =factor(df$hospital_escola, levels=c("Sim","Não","Prefiro não dizer"))
+
+df$hospital_acreditado =factor(df$hospital_acreditado, levels=c("Sim","Não","Prefiro não dizer"))
+
+####
+lista_coluna = c('outros_campos_0', 'outros_campos_1', 'outros_campos_2', 'outros_campos_3', 'outros_campos_4', 'outros_campos_5', 'outros_campos_6')
+for (coluna in lista_coluna){df[[coluna]][is.na(df[[coluna]])] = "0_na_vazio"}
+df$outros_campos_0 =factor(df$outros_campos_0, levels=c("0_na_vazio","Prática exclusiva de anestesia"))
+df$outros_campos_1 =factor(df$outros_campos_1, levels=c("0_na_vazio","Cuidados intensivos"))
+df$outros_campos_2 =factor(df$outros_campos_2, levels=c("0_na_vazio","Manejo da dor crônica"))
+df$outros_campos_3 =factor(df$outros_campos_3, levels=c("0_na_vazio","Ensino"))
+df$outros_campos_4 =factor(df$outros_campos_4, levels=c("0_na_vazio","Pesquisa"))
+df$outros_campos_5 =factor(df$outros_campos_5, levels=c("0_na_vazio","Responsabilidades administrativas"))
+df$outros_campos_6 =factor(df$outros_campos_6, levels=c("0_na_vazio","Prefiro não dizer"))
+
+df$mba =factor(df$mba, levels=c("Sim","Não","Prefiro não dizer"))
+
+df$grau_familiaridade =factor(df$grau_familiaridade, 
+                              levels=c("Sou entusiasta do tema e procuro me manter atualizado sobre as iniciativas envolvendo VBHC",
+                                       "Interesso-me pelo tema e já li alguns artigos ou assisti palestras sobre o tema",
+                                       "Interesso-me pelo tema mas nunca li artigos e nem assisti palestras sobre o tema",
+                                       "Tive pouco contato com o tema e não me sinto confortável em discuti-lo",
+                                       "Não tenho conhecimento sobre o tema","Prefiro não dizer"))
+
+####
+lista_coluna = c('q11_0', 'q11_1', 'q11_2', 'q11_3', 'q11_4', 'q11_5')
+for (coluna in lista_coluna){df[[coluna]][is.na(df[[coluna]])] = "0_na_vazio"}
+df$q11_0 =factor(df$q11_0, levels=c("0_na_vazio",
+                                    "A escalada dos custos da saúde que compromete a sustentabilidade do sistema de saúde"))
+df$q11_1 =factor(df$q11_1, levels=c("0_na_vazio",
+                                    "A demanda dos pagadores (pacientes, empresas e operadoras) por maior previsibilidade de custos"))
+df$q11_2 =factor(df$q11_2, levels=c("0_na_vazio",
+                                    "A mudança no perfil do paciente que passou a demandar mais informações e a comparar os prestadores"))
+df$q11_3 =factor(df$q11_3, levels=c("0_na_vazio",
+                                    "O movimento dos fornecedores para ganhar mercado por meio de contrato de compartilhamento de risco"))
+df$q11_4 =factor(df$q11_4, levels=c("0_na_vazio",
+                                    "Não estou ciente que este movimento vem ocorrendo"))
+df$q11_5 =factor(df$q11_5, levels=c("0_na_vazio",
+                                    "Prefiro não dizer"))
+
+
+df$q12 =factor(df$q12, levels=c("Capitation, recebendo um valor fixo por cada paciente atendido",
+                                "Fee for service, sendo remunerado pelo volume de atendimentos",
+                                "Assalariamento, recebendo um salário fixo, independentemente do volume",
+                                "Prefiro não dizer"))
+
+df$q13 =factor(df$q13, levels=c("Bundle",
+                                "Diária Global",
+                                "Pacote Cirúrgico",
+                                "Conta aberta",
+                                "Prefiro não dizer"))
+
+df$q14 =factor(df$q14, levels=c("É a percepção do paciente em relação aos benefícios que obteve do tratamento em relação à quantia paga pelo mesmo",
+                                "São os desfechos em saúde",
+                                "É a quantia de dinheiro paga por determinado tratamento",
+                                "É atingir um alto grau de satisfação do paciente mesmo que os desfechos e os custos estejam fora dos valores esperados",
+                                "Prefiro não dizer"))
+
+df$q15 =factor(df$q15, levels=c('Sim',"Não","Prefiro não dizer"))
+
+df$q16_0 =factor(df$q16_0, levels=c("Custo","Preço","Desfechos","Satisfação","Expectativas","Não conheço","Prefiro não dizer"))
+df$q16_1 =factor(df$q16_1, levels=c("Custo","Preço","Desfechos","Satisfação","Expectativas","Não conheço","Prefiro não dizer"))
+
+lista_coluna = c('q17_0_0', 'q17_0_1', 'q17_0_2', 'q17_0_3', 'q17_0_4')
+for (i in 0:7){
+  for (t in 0:4){
+    coluna = paste0("q17_",i,"_",t)
+    df[[coluna]] = NULL
+  }
+}
+
+df$q17_0_5 =factor(df$q17_0_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_0 = as.factor(df$q17_0)
+df$q17_1_5 =factor(df$q17_1_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_1 = as.factor(df$q17_1)
+df$q17_2_5 =factor(df$q17_2_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_2 = as.factor(df$q17_2)
+df$q17_3_5 =factor(df$q17_3_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_3 = as.factor(df$q17_3)
+df$q17_4_5 =factor(df$q17_4_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_4 = as.factor(df$q17_4)
+df$q17_5_5 =factor(df$q17_5_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_5 = as.factor(df$q17_5)
+df$q17_6_5 =factor(df$q17_6_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_6 = as.factor(df$q17_6)
+df$q17_7_5 =factor(df$q17_7_5, levels=c("Prefiro não dizer","Implementada no meu hospital"))
+df$q17_7 = as.factor(df$q17_7)
+
+df$q18_0 =factor(df$q18_0, levels=
+                    c("Concordo totalmente","Concordo","Nem concordo, nem discordo","Discordo","Discordo totalmente","Prefiro não dizer"))
+df$q18_1 =factor(df$q18_1, levels=
+                   c("Concordo totalmente","Concordo","Nem concordo, nem discordo","Discordo","Discordo totalmente","Prefiro não dizer"))
+df$q18_2 =factor(df$q18_2, levels=
+                   c("Concordo totalmente","Concordo","Nem concordo, nem discordo","Discordo","Discordo totalmente","Prefiro não dizer"))
+
+df$q20 =factor(df$q20, levels=c("Estou satisfeito e não quero mudar",
+                                "Estou satisfeito, mas estou aberto para discutir modelos alternativos",
+                                "Estou insatisfeito com o modelo e acredito que uma mudança é necessária",
+                                "Prefiro não dizer"))
+
+df$q21 =factor(df$q21, levels=c("Não","Sim",
+                                "Ainda não tenho uma ideia formada a respeito mas gostaria de ouvir mais",
+                                "Prefiro não dizer"))
+
+```
+
+```{r}
+cont(df, 'q19') %>% capture
+df$q19 %>% as.factor() %>% levels()
+df$q19 = df$q19 %>% as.factor()
+cont(df, 'q19') %>% capture
+# df$q19 =factor(df$q19, levels=c("Atuo principalmente como médico autônomo e recebo por cada atendimento que realizo (Fee-For-Service))",
+#                                 "Atuo principalmente como médico autônomo e recebo por cada atendimento que realizo porém já participo de algum acordo no qual ofereço \"garantias\" caso ocorra alguma complicação e recebo um \"bônus\" caso meus resultados estejam acima do acordado (Fee-For-Value))",
+#                                 "Atuo principalmente como médico contratado e recebo um salário mensal",
+#                                 "Prefiro não dizer"))
+```
+
+
+```{r}
+
+df$autonomo_assalariado = NA
+
+# Definindo 'assalariado'
+df$autonomo_assalariado[
+  (df$aonde_trabalha_0 != '0_na_vazio' | df$aonde_trabalha_2 != '0_na_vazio') &
+  (df$aonde_trabalha_1 == '0_na_vazio' & df$aonde_trabalha_3 == '0_na_vazio')
+] = 'Assalariado'
+
+# Definindo 'autonomo'
+df$autonomo_assalariado[
+  (df$aonde_trabalha_0 == '0_na_vazio' & df$aonde_trabalha_2 == '0_na_vazio') &
+  (df$aonde_trabalha_1 != '0_na_vazio' | df$aonde_trabalha_3 != '0_na_vazio')
+] = 'Autonomo'
+
+# Definindo 'assalariado_ou_autonomo'
+df$autonomo_assalariado[
+  (df$aonde_trabalha_0 != '0_na_vazio' | df$aonde_trabalha_2 != '0_na_vazio') &
+  (df$aonde_trabalha_1 != '0_na_vazio' | df$aonde_trabalha_3 != '0_na_vazio')
+] = 'Assalariado e Autonomo'
+
+df$autonomo_assalariado[df$aonde_trabalha_4 != '0_na_vazio'] = 'Prefiro não dizer'
+
+df$autonomo_assalariado = factor(df$autonomo_assalariado, levels = c('Assalariado','Autonomo','Assalariado e Autonomo','Prefiro não dizer'))
+cont(df, 'autonomo_assalariado')
+
+```
+
+
+```{r}
+df$setor_que_trabalha = NA
+
+# Definindo 'Privado'
+df$setor_que_trabalha[
+  (df$aonde_trabalha_0 != '0_na_vazio' | df$aonde_trabalha_1 != '0_na_vazio') &
+  (df$aonde_trabalha_2 == '0_na_vazio' & df$aonde_trabalha_3 == '0_na_vazio')
+] = 'Setor Privado'
+
+# Definindo 'Publico'
+df$setor_que_trabalha[
+  (df$aonde_trabalha_0 == '0_na_vazio' & df$aonde_trabalha_1 == '0_na_vazio') &
+  (df$aonde_trabalha_2 != '0_na_vazio' | df$aonde_trabalha_3 != '0_na_vazio')
+] = 'Setor Publico'
+
+# Definindo 'assalariado_ou_autonomo'
+df$setor_que_trabalha[
+  (df$aonde_trabalha_0 != '0_na_vazio' | df$aonde_trabalha_2 != '0_na_vazio') &
+  (df$aonde_trabalha_1 != '0_na_vazio' | df$aonde_trabalha_3 != '0_na_vazio')
+] = 'Setor Publico e Privado'
+
+df$setor_que_trabalha[df$aonde_trabalha_4 != '0_na_vazio'] = 'Prefiro não dizer'
+
+df$setor_que_trabalha = factor(df$setor_que_trabalha, levels = c('Setor Privado','Setor Publico','Setor Publico e Privado','Prefiro não dizer'))
+cont(df, 'setor_que_trabalha')
+```
+
+```{r}
+df$q18_0_01 = NA
+df$q18_0_01[df$q18_0 == "Concordo totalmente"] = 'Concordo'
+df$q18_0_01[df$q18_0 == "Concordo"] = 'Concordo'
+df$q18_0_01[df$q18_0 == "Nem concordo, nem discordo"] = 'Nem concordo, nem discordo'
+df$q18_0_01[df$q18_0 == "Discordo"] = 'Discordo'
+df$q18_0_01[df$q18_0 == "Discordo totalmente"] = 'Discordo'
+df$q18_0_01[df$q18_0 == "Prefiro não dizer"] = "Prefiro não dizer"
+df$q18_0_01 = factor(df$q18_0_01, levels=c('Concordo','Nem concordo, nem discordo','Discordo',"Prefiro não dizer"))
+cont(df, 'q18_0_01')
+
+df$q18_1_01 = NA
+df$q18_1_01[df$q18_1 == "Concordo totalmente"] = 'Concordo'
+df$q18_1_01[df$q18_1 == "Concordo"] = 'Concordo'
+df$q18_1_01[df$q18_1 == "Nem concordo, nem discordo"] = 'Nem concordo, nem discordo'
+df$q18_1_01[df$q18_1 == "Discordo"] = 'Discordo'
+df$q18_1_01[df$q18_1 == "Discordo totalmente"] = 'Discordo'
+df$q18_1_01[df$q18_1 == "Prefiro não dizer"] = "Prefiro não dizer"
+df$q18_1_01 = factor(df$q18_1_01, levels=c('Concordo','Nem concordo, nem discordo','Discordo',"Prefiro não dizer"))
+cont(df, 'q18_1_01')
+
+df$q18_2_01 = NA
+df$q18_2_01[df$q18_2 == "Concordo totalmente"] = 'Concordo'
+df$q18_2_01[df$q18_2 == "Concordo"] = 'Concordo'
+df$q18_2_01[df$q18_2 == "Nem concordo, nem discordo"] = 'Nem concordo, nem discordo'
+df$q18_2_01[df$q18_2 == "Discordo"] = 'Discordo'
+df$q18_2_01[df$q18_2 == "Discordo totalmente"] = 'Discordo'
+df$q18_2_01[df$q18_2 == "Prefiro não dizer"] = "Prefiro não dizer"
+df$q18_2_01 = factor(df$q18_2_01, levels=c('Concordo','Nem concordo, nem discordo','Discordo',"Prefiro não dizer"))
+cont(df, 'q18_2_01')
+
+```
+
+
+
+```{r}
+nrow(df)
+```
+
+```{r Colunas demograficas}
+colunas_demograficas = c("cargo",
+"idade",'idade_10em10',"idade_geracao","idade_40","idade_60",
+"tempo_formado",'tempo_formado_10em10',"tempo_formado_cat",#'tempo_formado_cat2',
+"regiao",
+"mba",
+"hospital_escola","hospital_acreditado",
+"aonde_trabalha_0","aonde_trabalha_1","aonde_trabalha_2","aonde_trabalha_3","aonde_trabalha_4",
+'autonomo_assalariado','setor_que_trabalha',
+"outros_campos_0","outros_campos_1","outros_campos_2","outros_campos_3","outros_campos_4","outros_campos_5","outros_campos_6")
+
+questoes_acertiva = c('grau_familiaridade','grau_familiaridade2',
+'q11_0','q11_1','q11_2','q11_3','q11_4','q11_5',
+'q12','q12_grau','q12_01',
+'q13','q13_01','q13_grau',
+'q14','q14_01','q14_grau',
+'q15',
+'q16_0','q16_1','q16_0_01','q16_1_01','q16_01_01','q16_grau',
+'q17_0_5','q17_0',
+'q17_1_5','q17_1',
+'q17_2_5','q17_2',
+'q17_3_5','q17_3',
+'q17_4_5','q17_4',
+'q17_5_5','q17_5',
+'q17_6_5','q17_6',
+'q17_7_5','q17_7',
+'q18_0','q18_1','q18_2',
+'q18_0_01','q18_1_01','q18_2_01',
+'q19',
+'q20',
+'q21'
+)
+
+```
+
+```{r}
+df_respondentes = df
+df = df %>% filter(respondeu == 'Respondentes')
+dim(df)
+
+for (coluna in names(df)){
+  classe = class(df[[coluna]])
+  if (classe == 'factor'){
+    df[[coluna]] = droplevels(df[[coluna]])
+  }
+}
+df_backup = df
+```
+
